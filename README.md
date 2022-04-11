@@ -5,21 +5,22 @@
 	git init
 
 #### 2 add all the files and folder into the git
-git add .
+	git add .
 
-##### 3 commit the "add" into git
-git commit -m "first commit"
+#### 3 commit the "add" into git
+	git commit -m "first commit"
 
-###### 4 declare the branch of this files in git
-git branch -M main
+#### 4 declare the branch of this files in git
+	git branch -M main
 
-####### 5 declare the remote repo where this files are stored.
-git remote set-url origin https://github.com/jonatslim/9800-WLC-Monitoring.git
+#### 5 declare the remote repo where this files are stored.
+	git remote set-url origin https://github.com/jonatslim/9800-WLC-Monitoring.git
 
-######## 6 push all the files into git repo.
-git push -u origin main
+#### 6 push all the files into git repo.
+	git push -u origin main
 
--
+# - old notes - 
+
 # confirm git is installed. If not installed, download git from https://git-scm.com/downloads
 	git --version
 # go to the folder with the files you want to "track - upload"
