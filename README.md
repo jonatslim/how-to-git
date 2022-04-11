@@ -1,11 +1,11 @@
-Notes
-makes changes in the windows folder and upload all results into the repo.
-1 init git on this folder
+#Notes
+#makes changes in the windows folder and upload all results into the repo.
+#1 init git on this folder
 	git init
 2 add all the files and folder into the git
 	git add .
 3 commit the "add" into git
-	git commit -m "first commit"
+    git commit -m "first commit"
 
 #4 declare the branch of this files in git
 git branch -M main
