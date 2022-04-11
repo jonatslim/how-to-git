@@ -1,0 +1,1158 @@
+= Source Code Management: Git
+
+== Step 0: Init
+
+* To view the document on MacOS or Linux, please install asciidoctor
+
+```
+cd software-engineering-101
+bundle
+```
+
+* Compile this document with asciidoctor
+
+```
+guard start
+
+# Alternatively, run asciidoctor
+asciidoctor README.adoc
+```
+
+* Create the docker container
+
+```
+# cd src
+# docker build -t software-engineering-101 -f Dockerfile .
+
+```
+
+* Run the docker container
+
+```
+# Password: cisco123
+ssh cisco@10.68.62.7
+
+# Please subsitate "tom_brady" with your name
+export NAME="tom_brady"
+docker run -dit --name ${NAME} software-engineering-101
+
+# Attach to the container
+docker attach ${NAME}
+
+# Alternatively
+# docker exec -it ${NAME} /bin/bash -c "export COLUMNS=`tput cols`; export LINES=`tput lines`; exec bash"
+```
+
+=== Managing Code
+
+Writing code as a group presents some challenges.
+
+==== Scenario 1: Multiple people editing the same file
+
+Let's start off with a file named *names.txt*. We simulate Adam and Eve edit the same file at the same time.
+
+```
+touch names.txt.adam names.txt.eve
+
+# Adam's Version
+echo "Adam" >> names.txt.adam
+
+# Eve's Version
+echo "Eve" >> names.txt.eve
+```
+
+Both Adam and Eve would end up with 2 different files, which would lead to **inconsistency**.
+
+```
+diff -u names.txt.adam names.txt.eve
+# --- names.txt.adam  2018-04-11 02:24:45.350390349 +0000
+# +++ names.txt.eve 2018-04-11 02:24:45.826399927 +0000
+# @@ -1 +1 @@
+# -Adam
+# +Eve
+```
+
+==== Scenario 2: Editing the same file multiple times
+
+It's also difficult to keep track of file changes and may lead to **data loss**.
+
+```
+touch story.txt
+
+# Version 1
+echo "Adam" >> story.txt
+
+# Version 2
+echo "is hungry" >> story.txt
+
+cat story.txt
+# Adam
+# is hungry
+
+# Version 3
+echo "Adam ate some food" > story.txt
+
+cat story.txt
+# Adam ate some food
+```
+
+==== Scenario 3: Copying the files each time an edit
+
+Overriding the same file is not ideal, so its easier to copy the file and replicate it each time an edit is made.
+
+```
+touch poem.txt
+
+# Version 1
+echo "Roses are red" > poem.txt.0
+
+# Version 2
+cp poem.txt.0 poem.txt.1
+echo "Violets are blue" >> poem.txt.1
+
+# Version 3
+cp poem.txt.1 poem.txt.2
+echo "Coffee is good" > poem.txt.2
+
+cat poem.txt.1
+#  Roses are red
+#  Violets are blue
+```
+
+We notice that this system is **not scalable**.
+
+=== Version Control to the rescue!
+
+Version control is a system that records changes to a file or set of files over time so that you can recall specific versions later.
+
+A **Local Version Control System** (VCS) stores version history as text or patches with the final file being directly accessible by the filesystem
+
+image::https://git-scm.com/book/en/v2/images/local.png[Local VCS]
+
+A **Centralized VCS** allows collaboration between multiple users/computers. Users checkout and push file versions.
+
+image::https://git-scm.com/book/en/v2/images/centralized.png[Centralized VCS]
+
+A **Distributed VCS** allows many nodes to store full version histories
+
+image::https://git-scm.com/book/en/v2/images/distributed.png[Distributed VCS]
+
+== Step 0.1: Git concepts
+
+=== A short history of Git
+
+https://git-scm.com/[Git] was born out of the need to manage the Linux kernel code. It revolves around a few priciples learnt from a DVCS called BitKeeper
+
+* Speed
+* Simple design
+* Strong support for **non-linear development** (thousands of parallel branches)
+* Fully **distributed**
+* Able to handle large projects like the Linux kernel efficiently (speed and data size)
+
+=== Snapshots vs Delta
+
+A delta represents the difference between two file (states).
+
+```
+diff -u poem.txt.0 poem.txt.1
+# --- poem.txt.0  2018-04-11 09:21:45.862277969 +0800
+# +++ poem.txt.1  2018-04-11 09:21:45.870278131 +0800
+# @@ -1 +1,2 @@
+#  Roses are red
+# +Violets are blue
+```
+
+image::https://git-scm.com/book/en/v2/images/deltas.png[Deltas]
+
+A snapshot stores the entire file of each staged file at each commit. Files that are not modified between commits uses a link to the previous stored file.
+
+image::https://git-scm.com/book/en/v2/images/snapshots.png[Snapshots]
+
+=== 3 + 2 File States
+
+The overall git workflow in a local repository (.git) invovles these 3 actions: **Stage, Commit, Checkout**
+
+image::https://git-scm.com/book/en/v2/images/areas.png[Git states]
+
+Zooming out of the picture, we get these file states
+
+* **Committed** means that the data is safely stored in your local database.
+* **Modified** means that you have changed the file but have not committed it to your database yet.
+* **Staged** means that you have marked a modified file in its current version to go into your next commit snapshot.
+* **Untracked** means that the file is not tracked by git
+* **Unmodified** means that the file is tracked but not modified from *HEAD* (last snapshot)
+
+image::https://git-scm.com/book/en/v2/images/lifecycle.png[File states]
+
+The basic Git workflow goes something like this:
+
+* [Do once] You *add* the files you want tracked into Git.
+* You **modify** files in your working tree.
+* You selectively **stage** just those changes you want to be part of your next commit, which adds only those changes to the staging area.
+* You do a **commit**, which takes the files as they are in the staging area and stores that snapshot permanently to your Git directory.
+
+=== Adding remotes into the picture
+
+Zooming out of the picture again, this time we include a remote repository
+
+image::https://i.stack.imgur.com/caci5.png[Git States with remote]
+
+We focus on the actions of **push, pull and fetch** in the later part of this course.
+
+== Step 1: Getting Started with Git
+
+=== Installing Git
+
+* Install git with instructions from https://git-scm.com/downloads
+
+```
+apt install git
+```
+
+=== First Time Setup for Git
+
+Setting up your identity allows people to identify the person/enitity reponsible for each commit. Each Git commit includes a user name and email.
+
+```
+git config --global user.name "Tom Brady"
+git config --global user.email "tom.brady@cisco.com"
+
+# View list of git configs
+git config --list
+```
+
+=== Creating a first Git Repo
+
+```
+# Make directory and change directory for this first step
+mkdir -p ~/myrepo
+cd ~/myrepo
+
+# Init Git
+git init
+# Initialized empty Git repository in /root/myrepo/.git/
+
+# View files in current repo
+ls -lah ~/myrepo
+```
+
+Notice here, `git init` creates a new subdirectory named *.git* that contains all of your necessary repository files — a Git repository skeleton.
+
+At this point, nothing in your project is tracked yet.
+
+
+=== Getting help
+
+To get help for git commands in general, add `--help` to the command, for example
+
+```
+git add --help
+```
+
+== Step 2: Git Basics
+
+=== Getting current status
+
+Preview current Git **status** with the following command
+
+```
+git status
+```
+
+=== Track, Change, Stage, Commit
+
+Let's create our first file.
+
+```
+touch first_file
+
+# Let's see what the git status is.
+git status
+```
+
+How about we **add** the file into the git working tree. This action causes git to start **tracking** the file * and **stage** it.
+
+```
+git add first_file
+
+# Let's see what the git status is.
+git status
+```
+
+Now let's perform the first **commit**
+
+```
+git commit -m "step 2: my first commit"
+
+# Let's see what the git status is.
+git status
+```
+
+==== Commit Integrity
+
+Each commit is referred to by its 40-character SHA-1 **checksum**. This makes it very easy to identify the exact commit used without the fear of collisions.
+
+```
+# Print the current branch's commit ID with the following
+git rev-parse HEAD
+
+# See the log of all commits until HEAD
+git log
+```
+
+=== Changing our first file
+
+Let's add something into our first file shall we?
+
+```
+echo "my first file" >> first_file
+
+# Let's see what the git status is.
+git status
+
+# Let's see the difference between the working tree and the staging area
+git diff
+```
+
+How about **staging** our changes so we can prepare for the commit?
+
+```
+git stage first_file
+
+# You can also use the command below to stage the file
+# git add first_file
+
+# Let's see the difference between the working tree and the staging area
+git diff
+
+# Extra credits: Show the difference between the working tree and the current HEAD
+git diff HEAD
+
+# Let's see what the git status is.
+git status
+
+# Let's check the list of commits
+git log
+```
+
+Notice here that the file is still not committed into the git repo.
+
+We now **commit** the changes to make our changes whole.
+
+```
+git commit -m "step 2: my second commit"
+
+# Let's see what the git status is.
+git status
+
+# Let's check the list of commits
+git log
+
+# Let's check the actual commit
+git show HEAD
+```
+
+=== Tagging our commits
+
+Let's tag this commit
+
+```
+git tag "v0.0" HEAD
+
+# List all tagged commit
+git tag --list
+```
+
+=== Working with remotes 1: Pushing
+
+image::https://i.stack.imgur.com/caci5.png[Git States with remote]
+
+We now create one remote, on localhost... :D
+
+```
+# Start the SSH Service
+/etc/init.d/ssh start
+
+# Try sshing into the "remote"
+ssh git@localhost
+```
+
+Let's create a remote git repo for myrepo
+
+```
+# As git user
+mkdir -p /home/git/myrepo.git
+cd /home/git/myrepo.git
+git init --bare
+
+# Return to root user
+exit
+```
+
+Let's **add the remote** we've created and list all remotes
+
+```
+# As root user
+cd ~/myrepo
+git remote add origin git@localhost:/home/git/myrepo.git
+
+# View current remotes
+git remote show
+```
+
+Let's **push** the latest master ref and tags over to the remote repo
+
+```
+# Pushing a ref (branch)
+git push origin master
+
+# Pushing a tag (Tag)
+git push origin v0.0
+```
+
+=== Working with remotes 2: Fetch, Merge, Pulling
+
+Down here we simulate another person worked on the same repo, producing a file titled 'tutorial_pull.edit'
+
+```
+~/scripts/tutorial_pull.sh
+```
+
+**Fetching** allows us to update the state of the local repository with that of the remote repository
+
+```
+git fetch origin master
+
+# Let's look at the list of commits for the ref origin/master
+git log origin/master
+
+# Let's look at the list of commits for the ref master
+git log master
+```
+
+**Merging** allows us to take the current HEAD and merge it with (origin/master), which is one commit ahead
+
+```
+git merge origin/master
+
+# Let's look at the list of commits for the ref master
+git log master
+```
+
+Down here we simulate another person worked on the same repo, producing a file titled 'tutorial_pull_2.edit'
+
+```
+~/scripts/tutorial_pull_2.sh
+```
+
+By **pulling** directly from master, we **fetch** the latest ref (origin/master) from origin and **merge** it to the current ref (master)
+
+```
+git pull origin master
+
+git log master
+```
+
+=== Working with remotes 3: Cloning
+
+Let's assume that we start from afresh, and
+
+```
+cd ~
+rm -rf ~/myrepo
+
+# Prove that myrepo is deleted
+ls -lah
+```
+
+Let's **clone** the repo from the remote.
+
+```
+git clone git@localhost:/home/git/myrepo.git
+cd myrepo
+
+git log
+```
+
+=== Working with remotes 4: Inspecting the remotes
+
+If you want to see more information about a particular remote, you can use the git remote show <remote> command. If you run this command with a particular shortname, such as origin, you get something like this:
+
+```
+git remote show origin
+```
+
+=== Undoing Changes
+
+Firstly let's check out what our file and git status looks like
+
+```
+# Let's see what our file looks like
+cat first_file
+
+# Let's see what the git status is.
+git status
+```
+
+Let's do a bad change to the file file
+
+```
+echo "bad change, please do not stage/commit this" >> first_file
+
+# Let's see what our file looks like
+cat first_file
+
+```
+
+Let's stage the file into the index
+
+```
+git stage first_file
+
+# Let's see what the git status is.
+git status
+```
+
+==== Undoing Changes 1: Unstaging a Staged File
+
+Opps, we shouldn't have staged the file, let's reverse that action!
+
+```
+git reset HEAD first_file
+
+# Let's see what the git status is.
+git status
+```
+
+==== Undoing Changes 2: Unmodifying a Modified File
+
+Let's reverse the change by **checking out** the same file from the index (stage)
+
+```
+# Check out from the index
+git checkout -- first_file
+
+# You can also check out from the ref master
+# git checkout master first_file
+
+# Let's see what our file looks like
+cat first_file
+
+# Let's see what the git status is.
+git status
+```
+
+==== Undoing Changes 3: Reset both index and working tree
+
+Reset **both** the **working tree and index** to an earlier commit using `--hard`.
+
+
+```
+# Inspect current directory
+ls && cat first_file
+
+# Here *HEAD~2* refers to the commit of the 2nd ancestor of HEAD.
+git reset --hard HEAD~2
+
+# To remove all untracked files and directories from the working tree too,
+git clean -f -d
+
+# Inspect current directory
+ls && cat first_file
+```
+
+=== Shallow Dive: .git directory structure
+
+The Git directory (.git) is where Git stores the metadata and object database for your project. This is the most important part of Git, and it is what is copied when you clone a repository from another computer.
+
+```
+tree .git
+# .git
+# |-- HEAD
+# |-- branches
+# |-- config
+# |-- description
+# |-- hooks
+# |   |-- applypatch-msg.sample
+# |   |-- commit-msg.sample
+# |   |-- post-update.sample
+# |   |-- pre-applypatch.sample
+# |   |-- pre-commit.sample
+# |   |-- pre-push.sample
+# |   |-- pre-rebase.sample
+# |   |-- prepare-commit-msg.sample
+# |   `-- update.sample
+# |-- index
+# |-- info
+# |   `-- exclude
+# |-- objects
+# |   |-- info
+# |   `-- pack
+# `-- refs
+#     |-- heads
+#     `-- tags
+```
+
+The working tree (what you edit and see) is a single checkout of one version of the project. These files are pulled out of the compressed database in the Git directory and placed on disk for you to use or modify.
+
+The **description** file is used to provide a name to the repository with the description and is only used by the Web UI.
+The **config** file contains your project-specific configuration options
+The **info** directory keeps a global exclude file for ignored patterns that you don’t want to track in a .gitignore file.
+The **hooks** directory contains your client- or server-side hook scripts.
+The **index** file is where Git stores your staging area information.
+
+== Step 3: Branching
+
+=== What are references and objects?
+
+https://git-scm.com/book/en/v2/Git-Internals-Git-References[Git references] allows us to use names to represent **commit checksums**. They are stored in `.git/refs`
+
+```
+# Print directory structure
+tree .git/refs
+
+# Display git object
+cat .git/refs/heads/master
+```
+
+https://git-scm.com/book/en/v2/Git-Internals-Git-Objects[Git objects] is a hash based filesystem that allows git to assign a **unique** (collision resistant) key to many types of objects:
+
+* commit objects
+* tree objects
+* file blob objects
+
+Each **snapshot** (represented in cyan) is a tree, which contains a dictionary of **( file paths, file pointers )** and possibly trees. The file pointers point to **file blobs** (represented in orange) situated in the git directory.
+
+image::https://git-scm.com/book/en/v2/images/data-model-2.png[Tree of trees]
+
+Note that each **commit** (represented in white) is represented by a **checksum** and the following information
+
+* parent commit
+* snapshot tree
+* author
+* committer
+* other relevant information such as timestamp, size
+
+image::https://git-scm.com/book/en/v2/images/commit-and-tree.png[Commit and Tree]
+
+Commits form a directed graph with most commits having a parent and/or a child.
+
+image::https://git-scm.com/book/en/v2/images/commits-and-parents.png[Commits and parents]
+
+A branch in Git is simply a lightweight movable pointer to one of these commits. The default branch name in Git is master. As you start making commits, you’re given a master branch that points to the last commit you made. Every time you commit, it moves forward automatically.
+
+image::https://git-scm.com/book/en/v2/images/branch-and-history.png[Branches and Commits]
+
+Different commits may share the same file pointer, especially when the files does not change between commits
+
+image::https://git-scm.com/book/en/v2/images/data-model-4.png[Reference]
+
+=== Git Log: Displaying the commit tree in style
+
+We can improve visibility of git log by remembering the acronym [A DOG].
+
+image::https://i.stack.imgur.com/ElVkf.jpg[A DOG]
+
+```
+git log --all --decorate --oneline --graph
+```
+
+I've taken the liberty to add some https://git-scm.com/book/en/v2/Git-Basics-Git-Aliases[git aliases] to fancy print git logs
+
+```
+# Confirm aliases are added
+cat ~/.gitconfig
+
+# Test 1: git log (a dog)
+git lg
+
+# Test 2: git log 1
+git lg1
+
+# Test 3: git log 2
+git lg2
+```
+
+=== Basic Branching 1: Creating a new branch, checking out a branch
+
+Let's create a new branch, and call it testing
+
+```
+git branch testing
+```
+
+image::https://git-scm.com/book/en/v2/images/two-branches.png[Two branches]
+
+Which branch are we currently on?
+
+```
+# Let's see which branch we're in
+git status
+```
+
+image::https://git-scm.com/book/en/v2/images/head-to-master.png[Head to master]
+
+In order to switch branches, we need to checkout the branch
+
+```
+git checkout testing
+
+# Let's see which branch we're in
+git status
+```
+
+image::https://git-scm.com/book/en/v2/images/head-to-testing.png[Head to testing]
+
+Let's make a change to the current HEAD (branch)
+
+```
+# Edit file
+echo "branch edit: testing" > branch_testing.txt
+
+# Stage and Commit File
+git add -A
+git commit -m "step 3: changed branch: testing"
+
+# Let's see how our pointer advanced
+git lg1
+```
+
+image::https://git-scm.com/book/en/v2/images/advance-testing.png[Advance testing HEAD]
+
+To go back to the master branch, we need only `checkout master`
+
+```
+git checkout master
+
+# Let's see which branch we're in
+git status
+
+# Let's see how our pointer advanced
+git lg1
+```
+
+image::https://git-scm.com/book/en/v2/images/checkout-master.png[Checkout master]
+
+=== Basic Branching 2: Merge vs Rebase
+
+Let's simulate that a person has committed to the master branch, producing a divergent
+
+```
+# Edit file
+echo "branch edit: master" > branch_master.txt
+
+# Stage and Commit File
+git add -A
+git commit -m "step 3: changed branch: testing"
+
+# Let's see how our pointer advanced
+git lg1
+```
+
+image::https://wac-cdn.atlassian.com/dam/jcr:01b0b04e-64f3-4659-af21-c4d86bc7cb0b/01.svg?cdnVersion=kq[Divergent History]
+
+We can merge the two histories together. We do so by specifying which branch would **merge into** with other branch/
+
+Here we merge **testing** into **master**
+
+```
+# Let's see what the differences are between master and testing
+git diff master testing
+
+# Checkout master branch
+git checkout master
+
+# Merge testing into master
+git merge -m "merge testing into master" testing
+
+# Observe the merge commit and git history
+git lg1
+```
+
+image::https://wac-cdn.atlassian.com/dam/jcr:e229fef6-2c2f-4a4f-b270-e1e1baa94055/02.svg?cdnVersion=kq[Merge Commit]
+
+Notice that merging preserves the commits of both branches, and is also descrribed as **non-destructive**.
+
+Let's start over
+
+```
+# Let's start over
+git reset --hard HEAD~1
+
+# Observe the merge commit and git history
+git lg1
+```
+
+https://git-scm.com/book/en/v2/Git-Internals-Git-References[Rebasing] rewrites the project history by moving the commits from the point of divergence to the current HEAD, onto the end of the rebased branch.
+
+```
+git rebase testing
+
+# Observe the merge commit and git history
+git lg1
+```
+
+image::https://wac-cdn.atlassian.com/dam/jcr:5b153a22-38be-40d0-aec8-5f2fffc771e5/03.svg?cdnVersion=kq[Rebase]
+
+=== Basic Branching 3: Dealing with conflicts
+
+We shall now create a conflict
+
+```
+# Checkout testing branch
+git checkout testing
+
+# Edit file
+echo "branch edit: testing - 2" > branch_master.txt
+
+# Stage and Commit File
+git add -A
+git commit -m "step 3: changed branch: testing"
+
+# Let's see how our pointer advanced
+git lg1
+```
+
+We see here a divergent history again, but this time the difference lies with the file `branch_master.txt`
+
+```
+# Let's see what the differences are between master and testing
+git diff master testing
+```
+
+Mergning master into testing would yield an issue.
+
+```
+# Attempt merger
+git merge master
+# Auto-merging branch_master.txt
+# CONFLICT (add/add): Merge conflict in branch_master.txt
+# Automatic merge failed; fix conflicts and then commit the result.
+
+# Let's see how our pointer advanced
+git lg1
+
+# Peek into branch_master.txt
+cat branch_master.txt
+```
+
+In this instance, the HEAD did not advance at all.
+
+Auto merging failed for `branch_master.txt` and git leaves both the commits in the file.
+
+Fixing this involves editing the affected file, then staging and commit the result.
+
+```
+# Edit affected file
+vim branch_master.txt
+
+# Stage and commit the file
+git commit -a -m "step 3: merged master into testing"
+
+# Let's see how our pointer advanced
+git lg1
+```
+
+=== Basic Branching 4: Revisiting Push
+
+We can push the branch `testing` into the remote git repo by performing `git push`
+
+```
+# Switch to testing branch
+git checkout testing
+
+# Push testing branch to origin
+git push origin testing
+
+# Let's see how our pointer advanced
+git lg1
+```
+
+Similarly, we can fetch and pull remote branches by using `git fetch <remote> <ref>` or `git pull <remote> <ref>`
+
+=== Branch Management: List and Delete branches
+
+We can list all branches by performing `git branch`
+
+```
+# List branches
+git branch
+```
+
+Deleting a branch invovles adding a `-d` flag to `git branch`
+
+```
+# Switch to master branch
+git checkout master
+
+# Delete testing branch
+git branch -d testing
+# error: The branch 'testing' is not fully merged.
+# If you are sure you want to delete it, run 'git branch -D testing'.
+```
+
+Oops, git is smart enough to warn us that deleting this branch will delete some git commits.
+
+We'll ignore the warning for now by using the `-D` flag instead.
+
+```
+# Delete testing branch
+git branch -D testing
+
+# Let's see how our pointer advanced
+git lg1
+```
+
+=== Shallow Dive: branches, snapshots and file blobs
+
+A reminder of how git stores its commits.
+
+image::https://git-scm.com/book/en/v2/images/data-model-4.png[Reference]
+
+Let's spelunky into the the git repository!
+
+```
+# View current git log
+git lg1
+
+# View master commit
+git cat-file -p master
+
+# View master's snapshot
+git cat-file -p master^{tree}
+
+# View master's grandparent commit
+git cat-file -p master~2
+
+# View master's grandparent's snapshot
+git cat-file -p master~2^{tree}
+
+# Look at the git object (file) at master's grandparent's snapshot
+file_blob_pointer=`git cat-file -p master~2^{tree} | grep 'first_file' | awk '{print $3}'`
+git cat-file -p $file_blob_pointer
+```
+
+=== Why branching?
+
+Branching allows different people and groups to **develop features concurrently**. This greatly improves speed of software engineering by allowing development of features to be done parallelly.
+
+=== Avoid Siloing
+
+image::https://git-scm.com/book/en/v2/images/lr-branches-2.png[Siloing]
+
+== Step 4: Git Hooks
+
+(https://git-scm.com/docs/githooks)[Git hooks] are scripts that you can run on a server to automate some build, or generate insight into certain git processes (e.g. commit).
+
+We can view examples for hooks in the .git/hooks directory
+
+```
+# View .git directory structure
+tree .git
+
+# View some hooks
+vim .git/hooks/
+```
+
+=== Adding hooks
+
+For brevity, we shall prepare 2 simple hooks,
+
+* one hook on the client, executed pre-push
+* one hook on the server, executed post-recieve
+
+```
+# Add simple client hook, pre-push
+cat <<EOF >>/root/myrepo/.git/hooks/pre-push
+#!/usr/bin/env python
+import sys
+import fileinput
+# Read in each ref that the user is trying to update
+for line in sys.stdin:
+    print "pre-push Trying to push ref: %s" % line
+EOF
+
+chmod +x /root/myrepo/.git/hooks/pre-push
+
+# SSH into remote (git)
+ssh git@localhost
+
+# Add simple server hook, post-receive
+cat <<EOF >>/home/git/myrepo.git/hooks/post-receive
+#!/usr/bin/env python
+import sys
+import fileinput
+# Read in each ref that the user is trying to update
+for line in sys.stdin:
+  print "pre-receive: Trying to push ref: %s" % line
+EOF
+
+chmod +x /home/git/myrepo.git/hooks/post-receive
+
+# Exit into local env (root)
+exit
+```
+
+=== Testing hooks
+
+```
+# Switch to master branch
+git checkout master
+
+# Write to a file
+echo "test hooks" > test_hooks.txt
+
+# Stage and Commit File
+git add -A
+git commit -m "step 5: changed branch: testing"
+
+# Let's see how our pointer advanced
+git push origin master
+```
+
+
+== Recap
+
+Git is a DVCS that allows engineers to write code with the following properties.
+
+* Speed
+* Simple design
+* Strong support for **non-linear development** (thousands of parallel branches)
+* Fully **distributed**
+* Able to handle large projects like the Linux kernel efficiently (speed and data size)
+
+=== Gitlab and Github
+
+Scaling git as a DVCS to host many repositories can be diffcult.
+
+https://about.gitlab.com/[Gitlab] and https://github.com/[Github] are examples of applications that builds upon Git and presents itself as a remote that enables easier SCM.
+
+Cisco uses both **Github Enterprise** and **Gitlab Community Edition**. You may check out the list of https://engit.cisco.com/code/github/service-urls-github[Cisco Github instances over at EngIT]. In order to access the Github Enterprise
+
+**Warning** Do not commit code to public repositories like https://github.com/[github.com] unless your code is approved for open sourcing!
+
+=== Github Enterprise
+
+Github Enterprise is a service provided by Github to host a private instance of Github for enterprise customers.
+
+The two most noticeable Github Enterprise instances are https://wwwin-github.cisco.com/[wwwin-github] and https://www-github.cisco.com/[www-github]
+
+=== GitLab
+
+I personally use the https://gitlab-sjc.cisco.com/[Cisco Gitlab instance hosted in SJC] as it is enabled for all CEC account holders.
+
+=== Other forms of SCM
+
+We skipped mentioning other SCM tools such as https://subversion.apache.org/[SVN].
+
+= Software Engineering 101
+
+Let's explore the methods used in software projects
+
+== Methodologies/Philosophies for Software Projects
+
+=== Continuous Integration/ Delivery
+
+https://www.martinfowler.com/articles/continuousIntegration.html[Continuous Integration] is a software development practice where members of a **team integrate their work frequently**, usually each person integrates at least daily - leading to multiple integrations per day. **Each integration is verified by an automated build** (including test) to **detect integration errors as quickly as possible**. Many teams find that this approach leads to significantly reduced integration problems and allows a team to develop cohesive software more rapidly.
+
+https://en.wikipedia.org/wiki/Continuous_delivery[Continuous Delivery] enable a constant flow of **changes into production** via an **automated software production line**. The Continuous Delivery pipeline is what makes it all happen. This changes include new features, configuration changes, bug fixes and experiments—into production, or into the hands of users. CD aims to achieve deployment in a **safely**, **quickly** and sustainable way
+
+=== DevOps
+
+https://en.wikipedia.org/wiki/DevOps[DevOps] is a culture that aims to unify software engineering and software operation. This hinges heavily on **software automation and monitoring** at all steps of software contruction, deployment and management. This allows shorter development times and reliable releases.
+
+=== SPADE
+
+http://wwwin-spade-stage.cisco.com/spade-portal/#/home[SPADE], Software Platform for Accelerated Development & Evolution, is **a single platform for automating Code Maintenance, Development & Delivery**. https://cisco.jiveon.com/groups/spade[SPADE's Jive Group] is a good resource for information but we will refer to a https://wwwin-github.cisco.com/AS-Community/spade-portal/blob/master/docs/SPADE-Automating_Build_Deployments.pdf[good powerpoint presentation about SPADE].
+
+The software rollout process is distilled into 7 steps, listed below.
+
+Here we see the difference between continuous deployment and continuous devlivery. Refer to **slide 9** of the slides for more information
+
+```
+Plan -> Build -> Test -> Quality Assurance -> Publish -> Release -> Deploy
+<-------- Continuous Integration -------->    <-- Continuous Delivery -->
+```
+
+== Build
+
+=== Going beyond git hooks
+
+Github and Gitlab uses integrations to **integrate with other services**, such as Jenkins. They work in the same principle as git hooks, wrapped behind a http based interface for easy programmability.
+
+=== Jenkins as CI Server
+
+https://jenkins.io/[Jenkins] is build tool that supports Continuous Integration and Continuous Delivery.
+
+I personally use https://engci-private-sjc.cisco.com/jenkins/sso-as/[the SJC private Jenkins server] as it is a Jenkins instance supported by EngIT.
+
+== Test
+
+The goal of https://en.wikipedia.org/wiki/Software_testing[software testing] is finding **software bugs** (errors or other defects), and **verifying** that the software product is fit for use.
+
+=== Rasta
+
+https://wwwin-github.cisco.com/AS-Community/RASTA[Rasta] is a test framework developed by Cisco based on https://github.com/robotframework/robotframework[Robot framework]
+
+* https://cisco.jiveon.com/groups/rasta[Jive Group]
+* https://wwwin-github.cisco.com/pages/AS-Community/RASTA/[Documentation]
+
+== Quality Assurance
+
+Quality Assurance relies on a set of standards that are tuned to different environments to **identify potential errors** and **improve code quality** (linting).
+
+=== Sonarqube
+
+https://www.sonarqube.org/[Sonarqube] is a platform for ensuring QA.
+
+I use https://engci-sonar-sjc.cisco.com/sonar/[SJC's Sonar]
+
+== Publish and Release
+
+Publish means exactly what it says on the tin, publishing the code/binaries, called **artifacts**, to a **central repository** so others may download.
+
+Release is the same as publish, but we make it official and inform the customer of its existance.
+
+=== Artifactory
+
+https://jfrog.com/artifactory/[Artifactory] is an artifact manager that aims to be the one place where all artifacts are stored.
+
+I use http://engci-maven-sjc.cisco.com/artifactory/AS-release/Internal/as-starhub/[SJC's artifactory]
+
+=== Deploy
+
+That's our job :D
+
+== Chaining the ecosystem together (DEMO only, no lab)
+
+* Testing with Robot Framework
+* Pipelining with Jenkins
+* Notifying with Spark
+* Linting with Sonarqube
+* Tracking with JIRA / Rally / Github
+
+== External Resources
+
+* https://git-scm.com/book/en/v2[Pro Git]
+  ** Materials from this tutorials are adapted from this book
+* https://try.github.io/levels/1/challenges/1[Github Tutorial]
+* https://gist.github.com/chrismccoy/8775224[Git Cheat Sheet]
+
+=== Attributions
+
+* https://www.linkedin.com/pulse/git-internals-how-works-kaushik-rangadurai
+* https://stackoverflow.com/questions/1057564/pretty-git-branch-graphs
+* https://www.atlassian.com/git/tutorials/merging-vs-rebasing
+* https://www.atlassian.com/git/tutorials/git-hooks
+
+
+ASCIICINEMA / ASCIICAST
+https://github.com/asciinema/asciinema/pull/196
+https://github.com/asciinema/asciinema
+
+
+
+
+
+
+
